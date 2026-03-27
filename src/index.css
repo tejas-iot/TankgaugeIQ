@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --color-earth-dark: #3d3028;
+  --color-earth-muted: #5c5149;
+  --color-earth-clay: #a68a76;
+  --color-earth-sage: #8b9474;
+  --color-earth-sand: #f4f1ee;
+  
+  --color-slate-primary: #1e293b;
+  --color-slate-secondary: #475569;
+  --color-slate-border: #cbd5e1;
+  --color-slate-soft: #f8fafc;
+}
+
+:root {
+  --earth-dark: #3d3028;
+  --earth-muted: #5c5149;
+  --earth-clay: #a68a76;
+  --earth-sage: #8b9474;
+  --earth-sand: #f4f1ee;
+}
+
+html, body {
+  background-color: #f1f5f9;
+  color: #1e293b;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+.card { 
+  background: white; 
+  border-radius: 12px; 
+  border: 1px solid var(--color-slate-border);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary { 
+  background-color: var(--color-slate-primary);
+  color: white; 
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.btn-primary:hover { background-color: #0f172a; }
+.btn-primary:disabled { background: var(--color-slate-border); color: #64748b; cursor: not-allowed; }
+
+.stat-label {
+  color: var(--color-slate-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.status-badge-producing { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+.status-badge-si { background-color: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+.status-badge-maintenance { background-color: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3; }
+
+.row-producing { background-color: #ffffff; }
+.row-si { background-color: rgba(255, 237, 213, 0.2); }
+.row-maintenance { background-color: rgba(255, 228, 230, 0.2); }
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
