@@ -1,0 +1,502 @@
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asante Resources - Windmill Creek Operations</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --earth-dark: #3d3028;
+            --earth-muted: #5c5149;
+            --earth-clay: #a68a76;
+            --earth-sage: #8b9474;
+            --earth-sand: #f4f1ee;
+        }
+
+        .bg-earth-header { background-color: var(--earth-dark); }
+        .text-earth-soft { color: #dcd3cc; }
+        
+        .status-badge-producing { @apply bg-emerald-100 text-emerald-800 border-emerald-200; }
+        .status-badge-si { @apply bg-orange-100 text-orange-800 border-orange-200; }
+        .status-badge-maintenance { @apply bg-rose-100 text-rose-800 border-rose-200; }
+        
+        .row-producing { @apply bg-white; }
+        .row-si { @apply bg-orange-50/20; }
+        .row-maintenance { @apply bg-rose-50/20; }
+
+        select { @apply bg-transparent border-none focus:ring-0 cursor-pointer font-bold text-xs uppercase tracking-wider w-full; }
+        
+        /* Custom styles for the task header */
+        .task-header-btn {
+            @apply bg-[#a68a76] hover:bg-opacity-90 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded shadow-sm flex items-center gap-1.5 transition whitespace-nowrap;
+        }
+
+        .editable-date:hover { background-color: rgba(255,255,255,0.1); cursor: pointer; }
+        .battery-stat-card { background-color: #fdfcfb; border: 1px solid #e9e4e0; border-radius: 0.5rem; padding: 0.75rem; text-align: center; }
+        .modal-overlay { background-color: rgba(61, 48, 40, 0.6); backdrop-filter: blur(2px); }
+
+        [contenteditable]:focus { outline: none; background: rgba(255,255,255,0.05); }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; }
+        }
+    </style>
+</head>
+<body class="bg-[#faf9f7] text-[#4a3f35] font-sans pb-12">
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center transition-opacity duration-500">
+        <div id="loading-spinner" class="w-12 h-12 border-4 border-[#a68a76] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p id="loading-text" class="text-[10px] font-black uppercase tracking-[0.2em] text-[#3d3028]">Connecting to Field Data...</p>
+        <button id="bypass-loading" onclick="useOfflineData()" class="mt-8 text-[9px] font-bold text-earth-clay border-b border-earth-clay uppercase tracking-widest opacity-60 hover:opacity-100">Click here to skip wait</button>
+    </div>
+
+    <!-- Task Modal -->
+    <div id="task-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden no-print">
+        <div class="absolute inset-0 modal-overlay" onclick="closeModal()"></div>
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md mx-4 relative z-10 overflow-hidden border border-[#a68a76]">
+            <div class="bg-earth-header p-4 flex justify-between items-center text-white">
+                <h3 class="font-bold text-sm uppercase tracking-widest">Add Repair Task</h3>
+                <button onclick="closeModal()" class="text-white hover:text-earth-clay text-xl">&times;</button>
+            </div>
+            <form id="task-form" onsubmit="addTask(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-[10px] font-bold text-earth-muted uppercase mb-1">Battery</label>
+                    <select id="modal-battery" class="w-full border border-slate-200 rounded p-2 text-sm !bg-slate-50">
+                        <option value="497/498">497/498</option>
+                        <option value="499">499</option>
+                        <option value="500/501">500/501</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-earth-muted uppercase mb-1">Well Number</label>
+                    <input type="text" id="modal-well" required placeholder="e.g. 33" class="w-full border border-slate-200 rounded p-2 text-sm outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-earth-muted uppercase mb-1">Action Required</label>
+                    <textarea id="modal-action" required placeholder="Describe the repair needed..." class="w-full border border-slate-200 rounded p-2 text-sm outline-none h-24"></textarea>
+                </div>
+                <div class="pt-4 flex gap-3">
+                    <button type="button" onclick="closeModal()" class="flex-1 px-4 py-2.5 border border-slate-300 rounded text-[11px] font-black uppercase">Cancel</button>
+                    <button type="submit" class="flex-1 px-4 py-2.5 bg-[#6e7855] text-white rounded text-[11px] font-black uppercase shadow-sm">Add Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-earth-header text-white p-6 shadow-md no-print border-b-4 border-[#a68a76]">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-xs font-bold tracking-[0.3em] text-earth-soft uppercase">Asante Resources, LLC</h1>
+                <h2 class="text-2xl font-black tracking-tighter">WINDMILL CREEK PROJECT</h2>
+                <p class="text-[10px] text-earth-clay font-bold uppercase tracking-widest mt-1">Field Status Update</p>
+            </div>
+            <div class="text-right flex flex-col items-end gap-3">
+                <div class="flex gap-2">
+                    <button type="button" onclick="copyFullReportToClipboard()" class="bg-white text-[#3d3028] text-[10px] font-black uppercase px-3 py-2 rounded hover:bg-slate-100 transition shadow-sm border border-[#dcd3cc] flex items-center gap-2">
+                        Copy Report
+                    </button>
+                    <button type="button" id="sync-btn" onclick="triggerManualSync()" class="bg-[#8b9474] hover:bg-[#7a8265] px-3 py-2 rounded text-[10px] font-black uppercase transition shadow-sm text-white">
+                        Sync Now
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-earth-soft uppercase font-black tracking-widest">Report Date:</span>
+                    <span contenteditable="true" id="report-date" onblur="handleDateChange()" class="editable-date text-[#a68a76] font-mono text-xs font-bold border-b border-dashed border-[#5c5149]">...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="dashboard-content" class="max-w-6xl mx-auto p-6 space-y-6">
+        <!-- Stats Section -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="md:col-span-1 bg-white rounded-lg shadow-sm border border-[#e9e4e0] p-6 flex flex-col justify-center">
+                <h2 class="text-[#8c7e73] text-[10px] uppercase tracking-[0.2em] font-bold mb-4">Total Field Performance</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="text-center bg-[#fcfbf9] py-3 rounded border border-[#f0edea]">
+                        <p class="text-2xl font-black text-[#3d3028]" id="stat-total">0</p>
+                        <p class="text-[10px] text-[#8c7e73] uppercase font-bold">Total Wells</p>
+                    </div>
+                    <div class="text-center bg-emerald-50 py-3 rounded border border-emerald-100">
+                        <p class="text-2xl font-black text-emerald-600" id="stat-producing">0</p>
+                        <p class="text-[10px] text-emerald-700 uppercase font-bold">Producing</p>
+                    </div>
+                </div>
+                <div class="mt-6 pt-4 border-t border-[#f0edea]">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[10px] font-bold text-[#8c7e73] uppercase">Field Uptime</span>
+                        <span class="text-xs font-bold text-[#8b9474]" id="stat-percent">0%</span>
+                    </div>
+                    <div class="w-full bg-[#f0edea] rounded-full h-2">
+                        <div id="uptime-bar" class="bg-[#8b9474] h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="md:col-span-2 bg-white rounded-lg shadow-sm border border-[#e9e4e0] p-6">
+                <h2 class="text-[#8c7e73] text-[10px] uppercase tracking-[0.2em] font-bold mb-4">Battery Performance Matrix</h2>
+                <div class="grid grid-cols-3 gap-4" id="battery-matrix-container"></div>
+            </div>
+        </section>
+
+        <!-- Tables -->
+        <div id="well-tables-container" class="space-y-8"></div>
+
+        <!-- Tasks Section (Maintenance Only) -->
+        <section id="operational-tasks-section" class="tasks-section bg-white rounded-lg shadow-sm border border-[#e9e4e0] overflow-hidden">
+            <div class="bg-[#3d3028] px-6 py-4 border-b border-[#a68a76] flex justify-between items-center flex-wrap gap-4">
+                <h2 class="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                    <span class="opacity-70">⚠</span> Open Maintenance Tasks
+                </h2>
+                <div class="no-print">
+                    <button onclick="openModal()" class="task-header-btn">
+                        <span>+</span> New Maintenance Item
+                    </button>
+                </div>
+            </div>
+            <div id="operational-tasks-list" class="p-0 overflow-x-auto">
+                <table class="w-full text-left text-sm min-w-[600px]">
+                    <thead class="bg-[#faf9f7] text-[#8c7e73] font-semibold uppercase text-[9px] tracking-wider border-b border-[#e9e4e0]">
+                        <tr>
+                            <th class="px-6 py-2 w-24">Battery</th>
+                            <th class="px-6 py-2 w-20">Well</th>
+                            <th class="px-6 py-2 w-32">Status</th>
+                            <th class="px-6 py-2">Maintenance Required</th>
+                        </tr>
+                    </thead>
+                    <tbody id="maintenance-tbody" class="divide-y divide-[#f0edea]"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+        // Constants and State
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'windmill-creek-default';
+        let db, auth;
+        let wells = [];
+        
+        // DYNAMIC LOGIC: Default to today's date
+        const today = new Date();
+        const formattedToday = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        let reportDate = formattedToday;
+
+        let user = null;
+        let isOnline = false;
+
+        const DEFAULT_WELLS = [
+            { id: '32', battery: '497/498', status: 'producing', action: 'BEST IN FIELD (Roger) - Running 24hr/day - 15psi WH Pressure', info: "734' / OH COMP" },
+            { id: '30', battery: '497/498', status: 'producing', action: 'Standard cycles: 4-6 hrs per day', info: "750' / 732-740" },
+            { id: '31', battery: '497/498', status: 'si', action: 'Makes oil & wtr - needs dedicated 1 week individual test', info: "750' / TBD" },
+            { id: '33', battery: '497/498', status: 'si', action: 'Motor added - still need to install breaker / 1 week test', info: "719' / 706-714" },
+            { id: '34', battery: '497/498', status: 'si', action: 'Installed motor tied down - needs 1 week test', info: "749' / 670-680" },
+            { id: '35', battery: '497/498', status: 'si', action: '100% Water. Across creek - No pump jack on site.', info: "775' / 660-668" },
+            { id: '36', battery: '497/498', status: 'producing', action: '4-6 hrs (Tried mud acid trial - unsuccessful)', info: "773' / 730-742" },
+            { id: '38', battery: '497/498', status: 'producing', action: '4-6 hrs per day', info: "733' / 712-722" },
+            { id: '39', battery: '497/498', status: 'producing', action: '6 hrs total per day (Split: 3 AM / 3 PM)', info: "780' / 736-744" },
+            { id: '21', battery: '499', status: 'producing', action: 'Needs required well sign installed', info: "Standard" },
+            { id: '22', battery: '499', status: 'producing', action: 'Needs unit staked down securely', info: "Standard" },
+            { id: '23', battery: '499', status: 'producing', action: 'Repair timer and associated wiring', info: "Standard" },
+            { id: '24', battery: '499', status: 'producing', action: 'Standard 4-6 hrs per day', info: "840' / 718-724" },
+            { id: '4', battery: '500/501', status: 'producing', action: 'Standard 4-6 hrs per day', info: "850' / TBD" },
+            { id: '5', battery: '500/501', status: 'si', action: 'CRITICAL: DO NOT RE-WORK. 4\' pay too expensive.', info: "Shut-In" },
+            { id: '6', battery: '500/501', status: 'maintenance', action: 'Broken belt - install new belt and restart immediately', info: "Repair" },
+            { id: '7', battery: '500/501', status: 'si', action: 'Needs new motor swap and restart sequence', info: "770' / 742-752" }
+        ];
+
+        // Failover Logic: If database connection takes more than 3s, load defaults
+        const failoverTimeout = setTimeout(() => {
+            if (!isOnline) {
+                console.warn("Connection slow. Switching to offline mode.");
+                window.useOfflineData();
+            }
+        }, 3000);
+
+        window.useOfflineData = () => {
+            if (isOnline) return;
+            wells = DEFAULT_WELLS;
+            renderUI();
+            hideOverlay();
+        };
+
+        const initFirebase = async () => {
+            try {
+                let config = {};
+                try {
+                    config = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                } catch(e) {}
+                
+                const app = initializeApp(config);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                onAuthStateChanged(auth, (u) => {
+                    user = u;
+                    if (user) startDataSync();
+                });
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Firebase init failed:", err);
+                window.useOfflineData();
+            }
+        };
+
+        function startDataSync() {
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'field_status');
+                onSnapshot(docRef, (docSnap) => {
+                    isOnline = true;
+                    clearTimeout(failoverTimeout);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        wells = data.wells || DEFAULT_WELLS;
+                        // Prioritize cloud date if it exists, otherwise keep today
+                        if (data.reportDate) reportDate = data.reportDate;
+                        renderUI();
+                    } else {
+                        wells = DEFAULT_WELLS;
+                        renderUI();
+                        syncToCloud();
+                    }
+                    hideOverlay();
+                }, (err) => {
+                    console.error("Sync error:", err);
+                    window.useOfflineData();
+                });
+            } catch (e) {
+                window.useOfflineData();
+            }
+        }
+
+        async function syncToCloud() {
+            if (!user || !db || !isOnline) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'field_status');
+                await setDoc(docRef, {
+                    wells,
+                    reportDate,
+                    lastUpdated: new Date().toISOString()
+                }, { merge: true });
+            } catch (err) { console.error("Cloud save failed", err); }
+        }
+
+        function hideOverlay() {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) {
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.classList.add('hidden'), 500);
+            }
+        }
+
+        // --- Core UI Functions ---
+        window.updateStatus = (id, battery, status) => {
+            const well = wells.find(w => w.id === id && w.battery === battery);
+            if (well) {
+                well.status = status;
+                updateStats();
+                syncToCloud();
+                renderTables();
+            }
+        };
+
+        window.updateAction = (id, battery, action) => {
+            const well = wells.find(w => w.id === id && w.battery === battery);
+            if (well) {
+                well.action = action;
+                window.updateOperationalTasks();
+                syncToCloud();
+            }
+        };
+
+        window.handleDateChange = () => {
+            const el = document.getElementById('report-date');
+            if (el.innerText !== reportDate) {
+                reportDate = el.innerText;
+                syncToCloud();
+            }
+        };
+
+        window.addTask = async (e) => {
+            e.preventDefault();
+            const bat = document.getElementById('modal-battery').value;
+            const wellId = document.getElementById('modal-well').value;
+            const action = document.getElementById('modal-action').value;
+
+            let well = wells.find(w => w.id === wellId && w.battery === bat);
+            if (well) {
+                well.status = 'maintenance';
+                well.action = action;
+            } else {
+                wells.push({ id: wellId, battery: bat, status: 'maintenance', action: action, info: 'NEW ENTRY' });
+            }
+            
+            window.closeModal();
+            renderUI();
+            await syncToCloud();
+        };
+
+        window.openModal = () => document.getElementById('task-modal').classList.remove('hidden');
+        window.closeModal = () => document.getElementById('task-modal').classList.add('hidden');
+
+        function renderUI() {
+            document.getElementById('report-date').innerText = reportDate;
+            renderTables();
+            updateStats();
+        }
+
+        function renderTables() {
+            const container = document.getElementById('well-tables-container');
+            container.innerHTML = '';
+            
+            const grouped = wells.reduce((acc, well) => {
+                if (!acc[well.battery]) acc[well.battery] = [];
+                acc[well.battery].push(well);
+                return acc;
+            }, {});
+
+            Object.keys(grouped).sort().forEach(batteryName => {
+                const bWells = grouped[batteryName].sort((a,b) => parseInt(a.id) - parseInt(b.id));
+                const section = document.createElement('div');
+                section.className = "battery-section bg-white rounded-lg shadow-sm border border-[#e9e4e0] overflow-hidden";
+                section.innerHTML = `
+                    <div class="bg-[#fcfbf9] px-6 py-3 border-b border-[#e9e4e0]">
+                        <h2 class="text-sm font-bold text-[#4a3f35] uppercase tracking-wider">Tank Battery ${batteryName}</h2>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm min-w-[700px]">
+                            <thead class="bg-[#faf9f7] text-[#8c7e73] font-semibold uppercase text-[10px] tracking-wider border-b border-[#e9e4e0]">
+                                <tr><th class="px-6 py-3 w-20">Well</th><th class="px-6 py-3 w-40">Status</th><th class="px-6 py-3 w-40">Depth/Perfs</th><th class="px-6 py-3">Notes</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-[#f0edea]">
+                                ${bWells.map(well => `
+                                    <tr class="row-${well.status}">
+                                        <td class="px-6 py-4 font-bold">#${well.id}</td>
+                                        <td class="px-6 py-4">
+                                            <div class="border rounded px-2 py-1 status-badge-${well.status}">
+                                                <select onchange="window.updateStatus('${well.id}', '${well.battery}', this.value)">
+                                                    <option value="producing" ${well.status === 'producing' ? 'selected' : ''}>Producing</option>
+                                                    <option value="si" ${well.status === 'si' ? 'selected' : ''}>Shut-In</option>
+                                                    <option value="maintenance" ${well.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+                                                </select>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-xs font-mono">${well.info}</td>
+                                        <td class="px-6 py-4">
+                                            <input type="text" value="${well.action}" 
+                                                   onchange="window.updateAction('${well.id}', '${well.battery}', this.value)"
+                                                   class="w-full bg-transparent border-b border-transparent focus:border-[#a68a76] focus:ring-0 text-sm py-1">
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+                container.appendChild(section);
+            });
+        }
+
+        function updateStats() {
+            const producing = wells.filter(w => w.status === 'producing').length;
+            const total = wells.length;
+            const percent = total > 0 ? Math.round((producing / total) * 100) : 0;
+            
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-producing').innerText = producing;
+            document.getElementById('stat-percent').innerText = `${percent}%`;
+            document.getElementById('uptime-bar').style.width = `${percent}%`;
+            
+            renderBatteryMatrix();
+            window.updateOperationalTasks();
+        }
+
+        function renderBatteryMatrix() {
+            const matrix = document.getElementById('battery-matrix-container');
+            const batteries = ['497/498', '499', '500/501'];
+            matrix.innerHTML = '';
+
+            batteries.forEach(bat => {
+                const bWells = wells.filter(w => w.battery === bat);
+                const prod = bWells.filter(w => w.status === 'producing').length;
+                const total = bWells.length;
+                const eff = total > 0 ? Math.round((prod/total)*100) : 0;
+                
+                const card = document.createElement('div');
+                card.className = "battery-stat-card flex flex-col justify-between shadow-sm border border-[#e9e4e0]";
+                card.innerHTML = `
+                    <div class="mb-2">
+                        <p class="text-[10px] font-black text-[#a68a76] uppercase">Battery</p>
+                        <p class="text-lg font-bold text-[#4a3f35] leading-none">${bat}</p>
+                    </div>
+                    <div class="flex items-end justify-between">
+                        <p class="text-2xl font-black ${eff > 70 ? 'text-emerald-600' : 'text-orange-500'}">${prod}<span class="text-xs text-[#a68a76] font-normal">/${total}</span></p>
+                        <div class="text-right">
+                            <p class="text-sm font-black text-[#5c5149]">${eff}%</p>
+                        </div>
+                    </div>`;
+                matrix.appendChild(card);
+            });
+        }
+
+        window.updateOperationalTasks = () => {
+            const tbody = document.getElementById('maintenance-tbody');
+            if (!tbody) return;
+            
+            // STRICT FILTER: Only show items explicitly set to maintenance status
+            const filtered = wells.filter(well => well.status === 'maintenance');
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-8 text-center text-[#8c7e73] italic text-xs uppercase font-bold tracking-widest opacity-50">No Active Maintenance Tickets</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(well => `
+                <tr class="hover:bg-rose-50 transition-colors">
+                    <td class="px-6 py-3 text-[10px] font-bold text-[#a68a76] uppercase tracking-tight">${well.battery}</td>
+                    <td class="px-6 py-3 font-black text-[#3d3028]">#${well.id}</td>
+                    <td class="px-6 py-3"><div class="inline-block border rounded px-2 py-0.5 text-[10px] font-black uppercase status-badge-maintenance">MAINTENANCE</div></td>
+                    <td class="px-6 py-3 text-xs font-medium text-[#4a3f35]">${well.action}</td>
+                </tr>`).join('');
+        };
+
+        window.triggerManualSync = async () => {
+            const btn = document.getElementById('sync-btn');
+            btn.innerText = 'Syncing...';
+            await syncToCloud();
+            btn.innerText = 'Synced';
+            setTimeout(() => btn.innerText = 'Sync Now', 2000);
+        };
+
+        window.copyFullReportToClipboard = () => {
+            let report = `ASANTE RESOURCES - WINDMILL CREEK\nDATE: ${reportDate}\n\n`;
+            wells.forEach(w => {
+                report += `#${w.id} (${w.battery}): ${w.status.toUpperCase()} - ${w.action}\n`;
+            });
+            const ta = document.createElement('textarea');
+            ta.value = report;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            
+            const btn = event.currentTarget;
+            btn.innerText = "COPIED!";
+            setTimeout(() => btn.innerText = "Copy Report", 2000);
+        };
+
+        initFirebase();
+    </script>
+</body>
+</html>
